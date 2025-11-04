@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motrix</title>
+<link rel="icon" href="https://img.icons8.com/ios-filled/50/0ff/speed.png" type="image/png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+body {
+  background: radial-gradient(circle at center, #111 40%, #000);
+  color: #0ff;
+  font-family: 'Orbitron', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  margin: 0;
+  padding-top: 60px;
+  text-align: center;
+}
+
+h2 { margin-bottom: 20px; }
+
+.speedometer-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 2px solid #0ff;
+  border-radius: 25px;
+  box-shadow: 0 0 20px #0ff;
+  background: #111;
+  width: 350px;
+}
+
+.digital-display {
+  font-family: 'Orbitron', monospace;
+  font-size: 7rem; /* big size */
+  color: #0ff;     /* plain color */
+  text-shadow: none; /* remove glow */
+  margin-bottom: 10px;
+}
+
+.speedometer {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #111 40%, #222 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 25px #0ff, inset 0 0 20px #0ff;
+}
+
+.needle {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  width: 3px;
+  height: 120px;
+  background: #0ff;
+  transform-origin: bottom;
+  transform: rotate(-120deg);
+  box-shadow: 0 0 10px #0ff;
+}
+
+.numeral {
+  position: absolute;
+  color: #0ff;
+  font-size: 0.9rem;
+  text-shadow: 0 0 5px #0ff;
+}
+
+.unit {
+  font-size: 1rem;
+  color: #aaa;
+  margin-top: 5px;
+}
+
+.status {
+  font-size: 1rem;
+  color: #aaa;
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+button {
+  background: #111;
+  border: 2px solid #0ff;
+  color: #0ff;
+  padding: 10px 15px;
+  font-size: 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.3s, color 0.3s;
+}
+
+button:hover {
+  background: #0ff;
+  color: #111;
+}
+
+footer {
+  margin-top: 15px;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+</style>
+</head>
+<body>
+
+<h2>🚗 Motrix</h2>
+
+<div class="speedometer-frame">
+
+  <div class="digital-display" id="digitalDisplay">0.0</div>
+
+  <div class="speedometer" id="speedometer">
+    <div class="needle" id="needle"></div>
+  </div>
+  <div class="unit" id="unit">km/h</div>
+
+  <div class="status" id="status">Waiting for GPS...</div>
+
+  <div class="buttons">
+    <button onclick="startTracking()">Start</button>
+    <button onclick="stopTracking()">Stop</button>
+    <button onclick="toggleMode()">Toggle Analogue/Digital</button>
+  </div>
+
+  <footer>© Manik Roy 2025 | All Rights Reserved.</footer>
+</div>
+
+<script>
+let vehicleMaxSpeed = 180;
+const needle = document.getElementById("needle");
+const speedometer = document.getElementById("speedometer");
+const digitalDisplay = document.getElementById("digitalDisplay");
+const statusEl = document.getElementById("status");
+const unitEl = document.getElementById("unit");
+
+let watchId = null;
+let currentSpeed = 0;
+let targetSpeed = 0;
+let analogueMode = true;
+let lastPos = null;
+let lastTime = null;
+let animationFrame = null;
+
+function addNumerals() {
+  const center = 150;
+  const radius = 120;
+  const old = document.querySelectorAll('.numeral');
+  old.forEach(e => e.remove());
+
+  for(let i=0; i<=vehicleMaxSpeed; i+=20){
+    const numeral = document.createElement('div');
+    numeral.className = 'numeral';
+    numeral.innerText = i;
+    const angle = (-120 + (i/vehicleMaxSpeed)*240) * Math.PI/180;
+    const x = center + radius * Math.cos(angle - Math.PI/2);
+    const y = center + radius * Math.sin(angle - Math.PI/2);
+    numeral.style.left = `${x-10}px`;
+    numeral.style.top = `${y-10}px`;
+    speedometer.appendChild(numeral);
+  }
+}
+
+addNumerals();
+
+function updateNeedle() {
+  let diff = targetSpeed - currentSpeed;
+  const maxDelta = 5; 
+  const delta = Math.max(-maxDelta, Math.min(diff, maxDelta));
+  currentSpeed += delta * 0.1;
+
+  if(analogueMode){
+    speedometer.style.display='flex';
+    needle.style.display='block';
+    digitalDisplay.style.display='none';
+    unitEl.style.display='block';
+    const angle = -120 + (currentSpeed/vehicleMaxSpeed)*240;
+    needle.style.transform = `rotate(${angle}deg)`;
+  } else {
+    speedometer.style.display='none';
+    needle.style.display='none';
+    digitalDisplay.style.display='block';
+    unitEl.style.display='none';
+  }
+
+  digitalDisplay.textContent = currentSpeed.toFixed(1);
+
+  if(Math.abs(diff) > 0.01) animationFrame = requestAnimationFrame(updateNeedle);
+  else animationFrame = null;
+}
+
+function showError(error){
+  switch(error.code){
+    case error.PERMISSION_DENIED: statusEl.textContent="❌ Location access denied."; break;
+    case error.POSITION_UNAVAILABLE: statusEl.textContent="⚠️ GPS signal unavailable."; break;
+    case error.TIMEOUT: statusEl.textContent="⌛ Location request timed out."; break;
+    default: statusEl.textContent="Unknown location error.";
+  }
+}
+
+function updatePosition(pos){
+  const now = pos.timestamp;
+  let measuredSpeed = 0;
+
+  if(lastPos && lastTime){
+    const dt = (now - lastTime)/1000;
+    const distance = haversineDistance(lastPos.latitude,lastPos.longitude,pos.coords.latitude,pos.coords.longitude);
+    if(dt>0) measuredSpeed = (distance/dt)*3.6;
+  }
+
+  lastPos = pos.coords;
+  lastTime = now;
+
+  let gpsSpeed = pos.coords.speed != null ? pos.coords.speed*3.6 : 0;
+  measuredSpeed = measuredSpeed > 0 ? measuredSpeed : gpsSpeed;
+
+  if(Math.abs(measuredSpeed - currentSpeed) > 50) measuredSpeed = currentSpeed;
+
+  const smoothingFactor = 0.2;
+  targetSpeed = targetSpeed + (measuredSpeed - targetSpeed) * smoothingFactor;
+
+  if(targetSpeed > vehicleMaxSpeed) targetSpeed = vehicleMaxSpeed;
+
+  if(!animationFrame) animationFrame = requestAnimationFrame(updateNeedle);
+  statusEl.textContent="Tracking speed...";
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2){
+  const R=6371000;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+
+function startTracking(){
+  if(!navigator.geolocation){ statusEl.textContent="Geolocation not supported."; return; }
+  if(watchId!==null){ statusEl.textContent="Tracking is already active."; return; }
+
+  statusEl.textContent="Activating GPS...";
+  watchId = navigator.geolocation.watchPosition(updatePosition, showError, {enableHighAccuracy:true, maximumAge:0, timeout:5000});
+
+  if(!animationFrame) animationFrame = requestAnimationFrame(updateNeedle);
+}
+
+function stopTracking(){
+  if(watchId!==null){
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    lastPos = null;
+    lastTime = null;
+    targetSpeed = 0;
+    statusEl.textContent="GPS tracking stopped.";
+
+    if(!animationFrame) requestAnimationFrame(updateNeedle);
+  } else statusEl.textContent="Tracking is not active.";
+}
+
+function toggleMode(){
+  analogueMode = !analogueMode;
+  if(!animationFrame) requestAnimationFrame(updateNeedle);
+}
+
+currentSpeed=0;
+targetSpeed=0;
+updateNeedle();
+</script>
+
+</body>
+</html>
